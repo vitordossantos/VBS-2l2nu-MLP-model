@@ -1,0 +1,157 @@
+ # In the following lines I mount google drive and define working directories
+
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+import os
+import tensorflow as tf
+import glob
+from google.colab import drive
+drive.mount('/content/gdrive', force_remount=True)
+data_dir =  '/content/gdrive/My Drive/Colab Notebooks/Data/MyAnalysis/'
+data_dir3 = data_dir +'YacineModels/'
+
+#In the following lines I do implement the reading of the 2018 ultra legacy MC .parquet files and apply pre-processing cuts
+data_2018 = pd.read_parquet(data_dir + 'df_2018_gnninput.parquet') # first reading of the parquet file
+
+# In the next line I remove the LO VBS events (I work only with NLO VBS), the InDYamc and HTDy Drell-Yan MC events (since I've chosen to work only with PTDy).
+data_2018 = data_2018[(data_2018['proc'] != 'ZZ_EWK_LO') & (data_2018['proc'] != 'IncDYamc') & (data_2018['proc'] != 'HTDY')]
+
+# The next line chooses which input features the MLP model will use as input features (note that ngood_bjets is not used as input feature, as well as ngood_jets which is used only for a specific purpose I'll explain later)
+interest_columns = ['lead_jet_pt','lead_jet_eta','lead_jet_phi','trail_jet_pt','trail_jet_eta','trail_jet_phi','third_jet_pt','third_jet_eta','third_jet_phi',\
+'leading_lep_pt','leading_lep_eta','leading_lep_phi','trailing_lep_pt', 'trailing_lep_eta','trailing_lep_phi','met_pt','met_phi','dijet_mass','dijet_deta','dilep_m','ngood_jets','ngood_bjets']
+
+# The following values are used in the job of applying pre-processing cuts, which are applied only to remove huge outliers that can prejudice the MinMaxScalling of the input features
+up_threshold_values = [1200,7,np.pi,600,7,np.pi,270,7,np.pi,700,7,np.pi,300,7,np.pi,800,np.pi,3200.0,8.8,106.0,np.inf,1.0]
+
+# The next line does the same as above, but defines the pré-processing cuts of the lower region for each input feature, in order to avoid the existence of outliers event and prejudice MinMaxScalling
+low_threshold_values = [30,-7,-np.pi,30,-7,-np.pi,-np.inf,-np.inf,-np.inf,20,-7,-np.pi,20,-7,-np.pi,30,-np.pi,0.0,0.5,76.0,1.0,-1]
+
+# The next line in effect applies the pré-processing cuts
+for i in range(len(interest_columns)):
+  data_2018 = data_2018[(data_2018[interest_columns[i]] < up_threshold_values[i]) & (data_2018[interest_columns[i]] > low_threshold_values[i])] 
+
+bkgLabel = 0.0 # defines which target will be used as the background target value
+
+sig = data_2018.loc[(data_2018['proc'] == 'ZZ_EWK_NLO_EE') | (data_2018['proc'] == 'ZZ_EWK_NLO_MuMu'),data_2018.columns] # The definition of the signal events dataframe
+bkg = data_2018.loc[(data_2018['proc'] != 'ZZ_EWK_NLO_EE') & (data_2018['proc'] != 'ZZ_EWK_NLO_MuMu'),data_2018.columns] # The definition of the background events dataframe
+sig['isSignal'] = np.ones((len(sig),)) # The definition of a column for us to identify each row of the formerly defined signal dataframe as a signal event tuple
+bkg['isSignal'] = np.zeros((len(bkg),)) + bkgLabel #The definition of a column for us to identify each row of the formerly defined background dataframe as a signal event tuple
+df_all = pd.concat([sig,bkg]) # Concatenate signal and background into an unique dataframe
+
+df_allEta = pd.DataFrame(df_all[(df_all['ngood_jets'] >= 2)],copy=True) # this is applied only to select the events in the dataframes that have at least 2 good jets
+
+# the next line in effect selects the input features that the ML model will use to train with
+df_allEta = df_allEta[['lead_jet_pt','lead_jet_eta','lead_jet_phi','trail_jet_pt','trail_jet_eta','trail_jet_phi','third_jet_pt','third_jet_eta','third_jet_phi','leading_lep_pt','leading_lep_eta','leading_lep_phi','trailing_lep_pt','trailing_lep_eta','trailing_lep_phi','met_pt','met_phi','dijet_mass','dijet_deta','dilep_m','ngood_jets','final_weight','isSignal',\
+                       'proc']] 
+
+df_allEta.loc[df_allEta['ngood_jets'] > 2,'ngood_jets'] = 3 # This line is in charge of setting the value 3 for the number of good jets, in the events that have more than 2. This is done this way because Yacine told me that we can not trust the ngood_jets variable to tell exactly the number of good jets the event has, but we can trust the information that the event has more than 2 every time we have the ngood_jets variable greater than 2
+
+df_allEta.loc[df_allEta['ngood_jets'] == 2,'third_jet_pt'] = 30.0 # This is important to give this quantity a value different than -99 every time the event has only 2 jets: since we must format the dataframe to contain all the events, no matter the number of good jets they have, every time the event has only 2 good jets its -99 value squeezes the at least 3 jets events information to a very small region in the 0.0 to 1.0 interval. This is done as a pre-processing procedure to enhance the MinMaxScalling
+
+df_allEta.loc[df_allEta['ngood_jets'] == 2,'third_jet_eta'] = 0.0 # This is done with the same purpose: enhance MinMaxScalling of the feature
+df_allEta.loc[df_allEta['ngood_jets'] == 2,'third_jet_phi'] = 0.0 # This is done with the same purpose: enhance MinMaxScalling of the feature
+
+bkgSumWeight = df_allEta.loc[df_allEta['isSignal'] == bkgLabel ,'final_weight'].sum() # Expresses the number of background events of the Run II 2018
+sigSumWeight = df_allEta.loc[df_allEta['isSignal'] == 1.0 ,'final_weight'].sum() # Expresses the number of NLO VBS, with final state in 2l 2nu events, for the Run II 2018
+
+df_allEta.loc[df_allEta['isSignal'] == bkgLabel ,'final_weight'] /= bkgSumWeight # This lines normalizes the background number of events, maintaining the relative proportions between the different kinds of backgrounds
+df_allEta.loc[df_allEta['isSignal'] == 1.0 ,'final_weight'] /= sigSumWeight # This line normalizes the NLO VBS with final state at 2l 2nu events.
+
+from sklearn.preprocessing import MinMaxScaler
+
+dataset = df_allEta.iloc[:,0:21].to_numpy() # This line gets the values from the lead_jet_pt to ngood_jets parameters, they will be used as input features for the MLP, the ones it can rely upon to separate signal from background
+dataset_W = df_allEta.iloc[:,21].to_numpy() # Defines a numpy array that represent normalized events weights, doesn't care if it's a background or a signal event
+dataset_Y = df_allEta.iloc[:,22].to_numpy() # Defines the numpy array that stands for the targets of the events
+scaler = MinMaxScaler() # Defines a MinMaxScaller
+scaler.fit(dataset) # Get the scalling parameters for each column of the numpy 2-D array representing the input features of the ML model
+dataset = scaler.transform(dataset) # transform the input features matrix, so that it's easier now for the ML model to converge when training and validating
+
+'''---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------'''
+
+from tensorflow import keras
+from tensorflow.keras.models import Sequential, Model
+from tensorflow.keras.layers import Input
+from tensorflow.keras.optimizers import SGD, Adam, Nadam
+from tensorflow.keras import utils
+from keras.callbacks import LearningRateScheduler, ModelCheckpoint, Callback
+
+filepath = data_dir3+'Unified/' # just a procedure to align the filepath of the model checkpoint class to a target folder in google drive
+
+# The following class definition is the custom significance class I use to choose the best training epoch, by selecting the highest validation point, as well as an agreement of less than 1% between its values for the training and validation datasets. I've also used it to understand if a MLP model is already very huge and unnecessary for the task of separating VBS from background
+
+@tf.keras.utils.register_keras_serializable()
+class globalSignificance(tf.keras.metrics.Metric):
+
+  def __init__(self, name='globalSig',threshold = 0.5,sigSumWeight = None,bkgSumWeight = None, **kwargs):
+    super(globalSignificance, self).__init__(name=name, **kwargs)
+    self.sigPart = self.add_weight(name='sigPart', initializer='zeros')
+    self.bkgPart = self.add_weight(name='bkgPart', initializer='zeros')
+    self.sigPartTotal = self.add_weight(name='sigPartTotal', initializer='zeros')
+    self.bkgPartTotal = self.add_weight(name='bkgPartTotal', initializer='zeros')
+    self.threshold = threshold
+    self.sigSumWeight = sigSumWeight.astype('float32')
+    self.bkgSumWeight = bkgSumWeight.astype('float32')
+
+  # This method implements the update of state variables that record training metrics between batches
+  def update_state(self, y_true, y_pred, sample_weight=None):
+    y_true = tf.cast(y_true, tf.bool) # cast float to boolean array
+    y_pred = tf.squeeze(y_pred) # This line corrects a bug I didn't noticed in 2 years: it changes the y_pred size from (batch_size,1) to (batch_size,). That corrected the wrong final result I was obtaining with the metric
+    y_pred2 = tf.cast(tf.greater(y_pred,tf.constant(0.0)), tf.bool) # this line gives a true value for all the prediction values the model outputs. The array has the shape (batch_size,)
+    '''
+    a linha abaixo entrega um vetor onde seu elemento é True se a predição auferida pelo modelo para um evento dado do batch for
+    maior do que o valor do parâmetro de inicialização self.threshold, caso contrário ele entrega False, também tem dimensão (200,)
+    '''
+    y_pred = tf.cast(tf.greater(y_pred,self.threshold), tf.bool) # Set a value to True whenever the model assigns a value greater than the self.threshold parameter to an element in the prediction array.
+    isSig = tf.logical_and(tf.equal(y_true, True), tf.equal(y_pred, True)) # Sets True to the True positive array elements and False to the ones that aren't
+    isSig = tf.cast(isSig, self.dtype) # Cast to boolean, in case isSig element isn't
+    isBkg = tf.logical_and(tf.equal(y_true, False), tf.equal(y_pred, True)) # Sets true to the false positives
+    isBkg = tf.cast(isBkg, self.dtype) # Cast to boolean, in case isBkg element isn't
+    '''
+    a linha de baixo é a mesma coisa que capturar todos os eventos de sinal do batch e atribuir verdadeiro, atribuindo falso aos eventos
+    de fundo, olhando melhor esta linha se demonstra desnecessária visto que era só fazer isTotalSig = y_true.
+    '''
+    isTotalSig = tf.logical_and(tf.equal(y_true, True), tf.equal(y_pred2, True)) # Array that is true whenever the batch element comes from a signal event
+    isTotalSig = tf.cast(isTotalSig, self.dtype) # cast para booleano, novamente não sei se precisa fazer isto
+    '''
+    a linha de baixo é uma linha que é o complemento de y_true, ou seja, o vetor obtido ao se inverter os targets de 1.0 para 0.0 e de 0.0 p 1.0
+    '''
+    isTotalBkg = tf.logical_and(tf.equal(y_true, False), tf.equal(y_pred2, True))
+    isTotalBkg = tf.cast(isTotalBkg, self.dtype) # cast para booleano
+
+    # o laço if abaixo usa os pesos que são passados no parâmetro weights de model.fit() para realizar cálculos com os pesos
+    if sample_weight is not None:
+      sample_weight = tf.cast(sample_weight, self.dtype)
+      isSig = tf.multiply(isSig, sample_weight) # vetor com os pesos dos eventos de sinal que sobreviveram ao threshold e que constam no batch
+      isBkg = tf.multiply(isBkg, sample_weight) # vetor com os pesos dos eventos de fundo que sobreviveram ao threshold e que constam no batch
+      isTotalSig = tf.multiply(isTotalSig, sample_weight) # vetor com os pesos de todos os eventos de sinal do batch e zerados para fundo
+      isTotalBkg = tf.multiply(isTotalBkg, sample_weight) # vetor com os pesos de todos os eventos de fundo do batch e zerados para sinal
+    '''
+    Aqui eu atribuo à variável de estado sigPart o número físico de eventos de sinal que sobreviveram ao corte segundo
+     o parâmetro self.treshold
+    '''
+    self.sigPart.assign_add(self.sigSumWeight*tf.reduce_sum(isSig))
+    # abaixo é a mesma coisa, mas é referente aos de fundo que sobreviveram
+    self.bkgPart.assign_add(self.bkgSumWeight*tf.reduce_sum(isBkg))
+    # abaixo é referente ao número de eventos de sinal que existe no batch, número do mundo real, da física.
+    self.sigPartTotal.assign_add(self.sigSumWeight*tf.reduce_sum(isTotalSig))
+    # mesma coisa de cima só que para todos os eventos de fundo que estão no batch, número do mundo real, da física.
+    self.bkgPartTotal.assign_add(self.bkgSumWeight*tf.reduce_sum(isTotalBkg))
+
+    '''
+    No método abaixo de nome result eu calculo a significância projetada, que nada mais é do que:
+    1.513274 * [sqrt(número de eventos totais de 2018) / sqrt(número de eventos totais do batch)] * [self.sigPart / sqrt(self.bkgPart)].
+    O valor 1.513274 se deve ao termo sqrt(137.4/60), que nada mais é do que um fator de estimativa de qual seria a significância caso
+    estivessem sendo usados os eventos de 2016+2017+2018. Isto é um favor que projeta a significância estimando o que seria caso os eventos
+    de todos estes anos estivessem sendo analisados, é sabido que só usei 2018 neste notebook
+    '''
+  def result(self):
+    return 1.513274*tf.math.divide(tf.math.multiply(tf.math.sqrt(self.sigSumWeight+self.bkgSumWeight),self.sigPart),\
+                          tf.math.multiply(tf.sqrt(self.bkgPartTotal + self.sigPartTotal),tf.math.sqrt(self.bkgPart)))
+
+  # o método abaixo resseta as variáveis de estado, necessário ao final de cada época de treinamento
+  def reset_state(self):
+    self.sigPart.assign(0)
+    self.bkgPart.assign(0)
+    self.sigPartTotal.assign(0)
+    self.bkgPartTotal.assign(0)
