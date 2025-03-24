@@ -228,9 +228,8 @@ from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLRO
 from sklearn.model_selection import train_test_split
 from tensorflow.keras import layers, models
 
-allYearsFactor = (137.4/60) # fator inutil que precisa ser apagado
-valTestSplit = 0.25 # esta variável diz que o split de validação tem 25% dos eventos do dataset inteiro
-epochs=200 # número de épocas de treinamento
+valTestSplit = 0.25 # 25% of the shuffled 2-D numpy array that represents our dataset will be assigned to as the validation split
+epochs=200 # Number of training epochs
 
 stopTraining = False # This variable is set to True every time the CustomModelCheckpoint class finds a model that fulfills all the preset conditions that a chosen model must reach. 
 while (not stopTraining):
