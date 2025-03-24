@@ -167,7 +167,7 @@ class CustomModelCheckpoint(Callback):
 	''' The line below sets a boolean variable which tells the CustomModelCheckPoint class if it's relevant to save the model every time it fulfills the conditions
             to be chosen as worth of being selected or if we should save only the best performant model.
 	'''
-        self.save_best_only = save_best_only 
+        self.save_best_only = save_best_only # Tell if we want to save only the best model, in the registered model's filepath, overwriting the former best model, or if we want to save the model everytime it improves
         self.trainValidation_percent_threshold = trainValidation_percent_threshold # This variable defines the maximum acceptable percentage discrepancy between the training and validation metric values for a model to be selected.
 
         self.best_val_metric = minimum_accepted_val_metric # This variable is the one that sets the minimum value, for the validation metric, that a model must have in order to be chosen. 
@@ -275,6 +275,7 @@ while (not stopTraining):
 
     '''
     The next line begins effectively stars the training and validation process, calling the CustomModelCheckpoint callback function and globalSignificance custom metric
+    '''
     history = model.fit( dataset_train , dataset_train_Y,
                     epochs=epochs,
                     batch_size=miniBatch,
