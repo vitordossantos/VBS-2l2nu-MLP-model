@@ -109,8 +109,10 @@ class globalSignificance(tf.keras.metrics.Metric):
     self.threshold = threshold
     self.sigSumWeight = sigSumWeight.astype('float32')
     self.bkgSumWeight = bkgSumWeight.astype('float32')
-
-  # This method implements the update of state variables that record training metrics between batches
+	  
+  '''
+  The next method implements the update of state variables that record training metrics between batches
+  '''
   def update_state(self, y_true, y_pred, sample_weight=None):
     y_true = tf.cast(y_true, tf.bool) # cast float to boolean array
     y_pred = tf.squeeze(y_pred) # This line corrects a bug I didn't noticed in 2 years: it changes the y_pred size from (batch_size,1) to (batch_size,). That corrected the wrong final result I was obtaining with the metric
@@ -146,7 +148,9 @@ class globalSignificance(tf.keras.metrics.Metric):
     return 1.513274*tf.math.divide(tf.math.multiply(tf.math.sqrt(self.sigSumWeight+self.bkgSumWeight),self.sigPart),\
                           tf.math.multiply(tf.sqrt(self.bkgPartTotal + self.sigPartTotal),tf.math.sqrt(self.bkgPart)))
 
-  # The following method only resets the relevant state variables, in the event of a training epoch end.
+  '''
+  The next method resets only the relevant state variables—the ones that need to be cleared or nullified at the end of a training epoch.
+  '''
   def reset_state(self):
     self.sigPart.assign(0)
     self.bkgPart.assign(0)
