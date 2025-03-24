@@ -23,7 +23,9 @@ In the next line I remove the LO VBS events (I work only with NLO VBS), the InDY
 data_2018 = data_2018[(data_2018['proc'] != 'ZZ_EWK_LO') & (data_2018['proc'] != 'IncDYamc') & (data_2018['proc'] != 'HTDY')]
 
 '''
-The next line chooses which input features the MLP model will use as input features (note that ngood_bjets is not used as input feature, as well as ngood_jets which is used only for a specific purpose I'll explain later)
+The next line selects the input features for the MLP model (note that ngood_bjets is used as a preselection cut feature, not as an input feature). ngood_jets, on the other hand, is an input feature, but it is 
+binary, since it is in charge of specifying exactly whether the event has exactly 2 jets or at least 3 jets, providing that information to the MLP model. This is done to help the MLP not be confused with
+the value 0.0 initialized in the third_jet_pt, third_jet_eta and third_jet_phi variables, when the event has exactly 2 jets.
 '''
 interest_columns = ['lead_jet_pt','lead_jet_eta','lead_jet_phi','trail_jet_pt','trail_jet_eta','trail_jet_phi','third_jet_pt','third_jet_eta','third_jet_phi',\
 'leading_lep_pt','leading_lep_eta','leading_lep_phi','trailing_lep_pt', 'trailing_lep_eta','trailing_lep_phi','met_pt','met_phi','dijet_mass','dijet_deta','dilep_m','ngood_jets','ngood_bjets']
