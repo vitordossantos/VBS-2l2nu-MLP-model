@@ -308,3 +308,97 @@ In the next two lines, I load the best model saved by the CustomModelCheckpoint 
 '''
 <chosenFileName = filepath+'best2.keras'
 model.load_weights(chosenFileName)
+'''------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------'''
+'''
+In the next two lines I bring the weights of the events back to the physical world weights, denormalizing signal and background weights
+'''
+dataset_test_W[dataset_test_Y == 1.0] = dataset_test_W[dataset_test_Y == 1.0]*(sigSumWeight)
+dataset_test_W[dataset_test_Y == 0.0] = dataset_test_W[dataset_test_Y == 0.0]*(bkgSumWeight)
+
+datasetcp_W = dataset_W.copy()
+datasetcp = dataset.copy()
+datasetcp_Y = dataset_Y.copy()
+'''
+In the next two lines I bring the weights of the entire dataset back to the physical world weights (not only the test sample but everything)
+'''
+datasetcp_W[datasetcp_Y == 1.0] = datasetcp_W[datasetcp_Y == 1.0]*sigSumWeight
+datasetcp_W[datasetcp_Y == 0.0] = datasetcp_W[datasetcp_Y == 0.0]*bkgSumWeight
+'''
+In the next two lines I obtain the predictions array for the test dataset and for the entire dataset
+'''
+predictions = np.squeeze(model.predict(dataset_test))
+predictions_all = np.squeeze(model.predict(dataset))
+'''-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------'''
+'''
+In the next lines we plot the loss and metric with the epoch index number in the x axis and those informed quantities in the y
+'''
+from sklearn.metrics import accuracy_score
+
+fig_hist = plt.figure(figsize=(22,8))
+ax_fig = fig_hist.add_subplot(1,2,1)
+
+# Plot loss vs epoch
+ax_fig.plot(history.history['loss'], label='loss')
+ax_fig.plot(history.history['val_loss'], label='val loss')
+ax_fig.legend(loc="upper right",fontsize=16)
+ax_fig.set_xlabel('epoch',fontsize=17)
+ax_fig.set_ylabel('loss',fontsize=17)
+ax_fig.tick_params(axis='both',which='major',labelsize=17)
+ax_fig.set_title('Loss of MLP',fontsize=18)
+plt.grid()
+
+# Plot accuracy vs epoch
+ax_fig = fig_hist.add_subplot(1,2,2)
+ax_fig.plot(history.history['globalSig'], label='Significance')
+ax_fig.plot(history.history['val_globalSig'], label='Val significance')
+ax_fig.legend(loc="lower right",fontsize=16)
+ax_fig.set_xlabel('epoch',fontsize=17)
+ax_fig.set_ylabel('Significance',fontsize=17)
+ax_fig.tick_params(axis='both',which='major',labelsize=17)
+ax_fig.set_title('Global significance custom metric plot',fontsize=18)
+
+plt.grid()
+'''------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------'''
+'''
+This cell is in charge of plotting the output scores histogram and the ROC curve
+'''
+
+from sklearn.metrics import roc_curve, auc, accuracy_score
+'''
+The next 5 lines computes the ROC curve values and the AUC_ROC value 
+'''
+plt.figure(figsize=(20,7))
+fpr, tpr, thresholds = roc_curve(dataset_test_Y, predictions,sample_weight=dataset_test_W)
+auc = 0.0
+for i in range(len(fpr)-1):
+  auc+=((fpr[i+1] - fpr[i]) * tpr[i])
+	
+ax = plt.subplot(1, 2, 1)
+plt.xticks(fontsize=16)
+plt.yticks(fontsize=16)
+ax.plot(fpr, tpr, lw=2, color='cyan')
+ax.plot([0, 1], [0, 1], linestyle='--', lw=2, color='k', label='random chance')
+ax.set_xlim([0, 1.0])
+ax.set_ylim([0, 1.0])
+ax.set_xlabel('False Positive Rate(FPR)',fontsize=18)
+ax.set_ylabel('True Positive Rate(TPR)',fontsize=18)
+ax.set_title('Unified MLP\'s ROC curve 60.0 $fb^{-1}$, Run II (13Tev)',fontsize=17)
+ax.legend(['auc = %.3f' % (auc)],loc="lower right",fontsize=16)
+
+'''
+The next line prints in the screen the Accuracy when we use the threshold of 0.5
+'''
+print("Accuracy: ",accuracy_score(dataset_test_Y,np.where(predictions>0.5,1,0),sample_weight=dataset_test_W[:]))
+
+# Plot DNN output
+ax = plt.subplot(1, 2, 2)
+X = np.linspace(0.0, 1.0, 100)
+plt.xticks(fontsize=16)
+plt.yticks(fontsize=16)
+ax.hist(predictions[dataset_test_Y[:]==1.0], bins=X, label='sig',histtype='step',weights=1e2*dataset_test_W[dataset_test_Y[:]==1.0])
+ax.hist(predictions[(dataset_test_Y[:]==0.0)], bins=X, label='bkg',histtype='step',weights=dataset_test_W[(dataset_test_Y[:]==0.0)])
+ax.set_xlabel('Output Score',fontsize=18)
+ax.set_ylabel('Events Number',fontsize=18)
+ax.set_title('Unified MLP\'s output scores 60 $fb^{-1}$, Run II (13Tev)',fontsize=17)
+ax.legend(['1e2 *sig','bkg'],loc='upper center',fontsize=16)
+plt.grid()
