@@ -66,7 +66,7 @@ while (not stopTraining):
 '''
 In the next two lines, I load the best model saved by the CustomModelCheckpoint callback class, allowing me to experiment with it and plot the output scores, ROC-AUC curve, or any other metrics I wish to explore.
 '''
-<chosenFileName = filepath+'best2.keras'
+chosenFileName = filepath+'best2.keras'
 model.load_weights(chosenFileName)
 '''------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------'''
 '''
