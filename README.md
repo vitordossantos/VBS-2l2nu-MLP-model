@@ -1,0 +1,1 @@
+This is the repository of my work at providing a decent custom callback function and a custom metric to choose the best training epoch of a shallow MLP with 200 neurons, at its unique hidden layer, which was trained and validated using the Ultra Legacy 2018 MC simulations with Dy and VBS at NLO.
