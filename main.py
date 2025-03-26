@@ -3,7 +3,7 @@
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau, TensorBoard
 from sklearn.model_selection import train_test_split
 from tensorflow.keras import layers, models
-from preprocessMC import dataset, dataset_W, dataset_Y
+from preprocessMC import dataset, dataset_W, dataset_Y, sigSumWeight, bkgSumWeight
 from significanceMetric import globalSignificance
 from bestModelCallback import CustomModelCheckpoint
 
