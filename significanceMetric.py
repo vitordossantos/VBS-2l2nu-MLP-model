@@ -5,8 +5,6 @@ from tensorflow.keras.optimizers import SGD, Adam, Nadam
 from tensorflow.keras import utils
 from keras.callbacks import LearningRateScheduler, ModelCheckpoint, Callback
 
-filepath = data_dir3+'Unified/' # just a procedure to align the filepath of the model checkpoint class to a target folder in google drive
-
 '''
 The following class definition is the custom significance class I use to choose the best training epoch, by selecting the highest validation point, as well as an agreement of less than 1% between its values for the 
 training and validation datasets. I've also used it to understand if a MLP model is already very huge and unnecessary for the task of separating VBS from background
