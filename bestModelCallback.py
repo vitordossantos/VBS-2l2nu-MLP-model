@@ -1,3 +1,6 @@
+'''
+The next class is responsible for selecting the best model throughout the entire training and validation process
+'''
 class CustomModelCheckpoint(Callback):
     def __init__(self,metric,filepath, monitor, mode='auto', save_best_only=True, trainValidation_percent_threshold=10,minimum_accepted_val_metric=-np.inf,maximum_acceptable_loss = np.inf,\
                  trainingEpochs = np.inf):
