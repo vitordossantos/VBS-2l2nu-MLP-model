@@ -11,6 +11,7 @@ from google.colab import drive
 drive.mount('/content/gdrive', force_remount=True)
 data_dir =  '/content/gdrive/My Drive/Colab Notebooks/Data/MyAnalysis/'
 data_dir3 = data_dir +'YacineModels/'
+filepath = data_dir3+'Unified/' # just a procedure to align the filepath of the model checkpoint class to a target folder in google drive
 
 '''
 In the following lines I do implement the reading of the 2018 ultra legacy MC .parquet files and apply pre-processing cuts
